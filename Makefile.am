@@ -52,6 +52,7 @@ EXTRA_DIST = \
 	licenses/bsd.txt \
 	licenses/mit.txt \
 	packages/sleuthkit.spec \
+	test/tools/cli_tests.txt \
 	test/tools/fstools/ils_output/1 \
 	test/tools/fstools/ils_output/2
 
@@ -651,10 +652,12 @@ test_data = \
 	test/data/a_file.1/dummy \
 	test/data/bogus.E01 \
 	test/data/bogus.E02 \
+	test/data/gpt_130_partitions.E01 \
 	test/data/image \
 	test/data/image_exfat1.E01 \
 	test/data/image_ext2.dd \
 	test/data/image_ext2.xml \
+	test/data/image-mbr.dd \
 	test/data/image/image.dd \
 	test/data/image/image.dd.json \
 	test/data/image/image.E01 \
@@ -687,7 +690,9 @@ check_script_files = \
 	test/tools/vstools/mmls_output \
 	test/tools/vstools/mmls_output/1 \
 	test/tools/vstools/mmls_output/2 \
-	test/tools/vstools/mmls_output/3
+	test/tools/vstools/mmls_output/10 \
+	test/tools/vstools/mmls_output/11 \
+	test/tools/vstools/mmls_output/12
 
 
 # check_SCRIPTS are included in the DIST but not run
@@ -726,7 +731,8 @@ EXTRA_DIST +=  $(test_data) $(check_script_files) $(check_SCRIPTS) $(check_TESTS
 
 TESTS =	$(check_TESTS) \
 	test/catch_runner \
-	test/fiwalk/fiwalk_test
+	test/fiwalk/fiwalk_test \
+	test/tools/tsk_cli_runner
 
 TEST_EXTENSIONS = .sh
 SH_LOG_COMPILER =
@@ -742,6 +748,7 @@ endif
 check_PROGRAMS = \
 	test/catch_runner \
 	test/fiwalk/fiwalk_test \
+	test/tools/tsk_cli_runner \
 	test/img_dump/img_dump \
 	test/legacy/fs_attrlist_apis \
 	test/legacy/fs_fname_apis \
@@ -752,8 +759,6 @@ test_catch_runner_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/vendors $(CATCH2_CPP
 test_catch_runner_LDADD = $(TSK_LIBS)
 test_catch_runner_SOURCES = \
 	test/tsk/img/test_img.h \
-	test/tools/tsk_tempfile.h \
-	test/tools/tsk_tempfile.cpp \
 	test/tsk/base/test_tsk_error.cpp \
 	test/tsk/img/test_aff4.cpp \
 	test/tsk/img/test_ewf.cpp \
@@ -769,10 +774,31 @@ test_catch_runner_SOURCES = \
 	test/tsk/fs/test_unix_misc.cpp \
 	test/tsk/util/test_crypto.cpp \
 	test/tsk/hashdb/test_binsrch_index.cpp \
+	test/tsk/hashdb/test_hdb_base.cpp \
+	test/tsk/hashdb/test_idxonly.cpp \
+	test/tsk/hashdb/test_incase.cpp \
+	test/tsk/hashdb/test_hashkeeper.cpp \
+	test/tsk/hashdb/test_md5sum.cpp \
+	test/tsk/hashdb/test_sqlite_hdb.cpp \
+	test/tsk/hashdb/test_tsk_hashdb.cpp \
 	test/tsk/fs/test_fs_name.cpp \
 	test/tsk/fs/test_fs_types.cpp \
 	test/tsk/fs/test_ntfs.cpp \
 	test/tsk/fs/test_ffs.cpp \
+	test/tsk/fs/test_nofs_misc.cpp \
+	test/tsk/fs/test_dcalc_lib.cpp \
+	test/tsk/fs/test_dcat_lib.cpp \
+	test/tsk/fs/test_dls_lib.cpp \
+	test/tsk/fs/test_xfs_dent.cpp \
+	test/tsk/fs/test_fs_attr.cpp \
+	test/tsk/fs/test_fs_load.cpp \
+	test/tsk/fs/test_fs_dir.cpp \
+	test/tsk/fs/test_fs_file.cpp \
+	test/tsk/fs/test_fs_io.cpp \
+	test/tools/test_cli_runner.cpp \
+	test/tools/test_utils.cpp \
+	test/tools/tsk_tempfile.h \
+	test/tools/tsk_tempfile.cpp \
 	test/catch_runner.cpp \
 	vendors/catch.hpp
 
@@ -781,6 +807,15 @@ test_fiwalk_fiwalk_test_LDADD = $(TSK_LIBS)
 test_fiwalk_fiwalk_test_SOURCES = \
 	test/fiwalk/fiwalk_test.cpp \
 	$(tools_fiwalk_src_libfiwalk_la_SOURCES)
+
+test_tools_tsk_cli_runner_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/vendors $(CATCH2_CPPFLAGS)
+test_tools_tsk_cli_runner_LDADD = $(TSK_LIBS)
+test_tools_tsk_cli_runner_SOURCES = \
+  test/tools/tsk_cli_runner.cpp \
+  test/tools/test_utils.cpp \
+  test/tools/test_utils.h \
+  test/tools/tsk_tempfile.cpp \
+  test/tools/tsk_tempfile.h
 
 test_img_dump_img_dump_LDADD = $(TSK_LIBS)
 test_img_dump_img_dump_SOURCES = test/img_dump/img_dump.cpp

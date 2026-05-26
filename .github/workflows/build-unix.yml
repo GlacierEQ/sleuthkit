@@ -45,6 +45,7 @@ jobs:
             address_sanitizer: "yes"
             keep_artifacts: "yes"
             enable_java: "yes"
+            run_distcheck: "yes"
 
           - os: "linux"
             arch: "x86_64"
@@ -56,6 +57,14 @@ jobs:
             address_sanitizer: "yes"
             keep_artifacts: "no"
             enable_java: "yes"
+
+          - os: "linux"
+            arch: "x86_64"
+            linkage: "static"
+            runner: "ubuntu-22.04"
+            configure_opts: "--enable-static --disable-shared --disable-java --without-afflib --without-libcrypto --without-libewf --without-libvhdi --without-libvmdk"
+            # remove after testing: configure_opts: "--enable-static --disable-shared --disable-java"
+            codecov: "no"
 
           - os: "mingw"
             arch: "x86_64"
@@ -108,7 +117,7 @@ jobs:
             keep_artifacts: "no"
 
     steps:
-      - name: Determine number of cores
+      - name: Determine number of cores and amount of free space
         id: cores
         run: |
           if [ ${{ startsWith(matrix.runner, 'macos') }} = true ]; then
@@ -121,6 +130,7 @@ jobs:
           fi
           echo "cores=$CORES" >>$GITHUB_OUTPUT
           echo "Using $CORES cores"
+          df -h
 
       - name: Install MacOS packages
         env:
@@ -158,7 +168,7 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt update
-          sudo apt install autoconf automake libtool make pkg-config mingw-w64 mingw-w64-tools libz-mingw-w64-dev wine32 wine64 wget
+          sudo apt install autoconf automake libtool make pkg-config mingw-w64 mingw-w64-tools libz-mingw-w64-dev wine32 wine64 wget libpcre3-dev libgnurx-mingw-w64-dev
           sudo update-alternatives --set ${{ matrix.arch }}-w64-mingw32-g++ /usr/bin/${{ matrix.arch }}-w64-mingw32-g++-posix
           # This is not working; also requires mingw-w64-x86_64-libgnurx
           # echo === installing libmagic for mingw ===
@@ -182,6 +192,9 @@ jobs:
       - name: Run configure
         run: |
           ./configure ${{ matrix.configure_opts }}
+
+      - name: Show config file
+        run: cat tsk/tsk_config.h
 
       - name: Unpack and List the test data
         run: |
@@ -241,6 +254,7 @@ jobs:
           WINEARCH: ${{ matrix.winearch }}
           WINEPATH: ${{ matrix.winepath }}
           WINEPREFIX: ${{ matrix.wineprefix }}
+          TZ: UTC
         run: |
           make -j${{ steps.cores.outputs.cores }} check ${{ matrix.make_flags }} VERBOSE=1 LOG_COMPILER=scripts/wine_wrapper.sh || result=1 ; for i in $(find test -name '*.log') ; do printf '\n%79s\n' | tr ' ' '=' ; echo "$i" ; cat "$i" ; done ; exit $result
 
@@ -280,6 +294,7 @@ jobs:
           retention-days: 15
 
       - name: Run distcheck
+        if: ${{ matrix.run_distcheck == 'yes' }}
         run: |
           ./configure
           make distcheck

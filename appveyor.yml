@@ -14,7 +14,6 @@ environment:
     appveyor_build_worker_image: macos-sonoma
 
 matrix:
-
   fast_finish: true
 
 
@@ -32,6 +31,8 @@ for:
       - C:\ProgramData\chocolatey\lib
 
     install:
+      - cmd: dir
+      - ps: Get-CimInstance -Class Win32_LogicalDisk | Select-Object DeviceID,@{Name="Size(GB)";Expression={[Math]::Round($_.Size / 1GB, 2)}},@{Name="FreeSpace(GB)";Expression={[Math]::Round($_.FreeSpace / 1GB, 2)}},@{Name="FreeSpace(%)";Expression={[Math]::Round(($_.FreeSpace / $_.Size) * 100, 2)}} |Format-Table -AutoSize
       - ps: choco install nuget.commandline
       - ps: choco install ant --ignore-dependencies
       - ps: $env:Path="C:\Program Files\Java\jdk1.8.0\bin;$($env:Path);C:\ProgramData\chocolatey\lib\ant"
@@ -65,6 +66,7 @@ for:
         - job_name: Linux Build
 
     install:
+      - df -h
       - sudo apt update --allow-releaseinfo-change
       - sudo apt install -y autoconf python3-venv
 
@@ -83,19 +85,18 @@ for:
         - job_name: macOS Build
 
     build_script:
+      - df -h
+      - export TZ=UTC
       - ./bootstrap
       - ./configure -q
       - V=0 make -j
-
-    get_test_data:
-      - pushd ..
-      - pwd
       - curl https://digitalcorpora.s3.amazonaws.com/corpora/drives/tsk-2024/sleuthkit_test_data.zip -o sleuthkit_test_data.zip
       - unzip sleuthkit_test_data.zip
       - cd sleuthkit_test_data
       - make unpack
       - find . -ls | grep -v '[.]git'
-      - popd
+      - cd ..
 
     test_script:
+      - export TZ=UTC
       - SLEUTHKIT_TEST_DATA_DIR=$(pwd)/sleuthkit_test_data V=0 make -j check VERBOSE=1

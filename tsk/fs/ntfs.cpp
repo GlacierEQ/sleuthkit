@@ -20,6 +20,7 @@
 #include "tsk_ntfs.h"
 
 #include <ctype.h>
+#include <stddef.h>
 
 #include <memory>
 
@@ -656,7 +657,7 @@ ntfs_make_data_run(NTFS_INFO * ntfs, TSK_OFF_T start_vcn,
          * A length of more than eight bytes will not fit in the
          * 64-bit length field (and is likely corrupt)
          */
-        if (NTFS_RUNL_LENSZ(run) > 8 || NTFS_RUNL_LENSZ(run) > runlist_size - runlist_offset - 1) {
+        if (NTFS_RUNL_LENSZ(run) > 8 || (uint32_t) NTFS_RUNL_LENSZ(run) > runlist_size - runlist_offset - 1) {
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
             tsk_error_set_errstr
@@ -698,7 +699,7 @@ ntfs_make_data_run(NTFS_INFO * ntfs, TSK_OFF_T start_vcn,
          * An address offset of more than eight bytes will not fit in the
          * 64-bit addr_offset field (and is likely corrupt)
          */
-        if (NTFS_RUNL_OFFSZ(run) > 8) {
+        if (NTFS_RUNL_OFFSZ(run) > 8 || (uint32_t) ( NTFS_RUNL_LENSZ(run) + NTFS_RUNL_OFFSZ(run) ) > runlist_size - runlist_offset - 1) {
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
             tsk_error_set_errstr
@@ -1909,8 +1910,10 @@ ntfs_proc_attrseq(NTFS_INFO * ntfs,
 
         // Ensure that the name offset doesn't refer to a location beyond
         // the attribute.
-        if (((uintptr_t)attr + tsk_getu16(fs->endian, attr->name_off)) >
-            ((uintptr_t)attr + tsk_getu32(fs->endian, attr->len))) {
+        uint16_t attr_name_off = tsk_getu16(fs->endian, attr->name_off);
+        uint32_t attr_len = tsk_getu32(fs->endian, attr->len);
+        // Note that it is valid for the name offset to be equal to the attribute length.
+        if ((uint32_t) attr_name_off > attr_len) {
             break;
         }
 
@@ -1923,11 +1926,13 @@ ntfs_proc_attrseq(NTFS_INFO * ntfs,
          * entry is in there.  Use that ID instead so that we always have
          * unique IDs for each attribute -- even if it spans multiple MFT entries. */
         if (a_attr_map) {
+            if ((uint32_t) attr->nlen > (attr_len - (uint32_t) attr_name_off) / 2) {
+                break;
+            }
             for (i = 0; i < a_attr_map->num_used; i++) {
                 if ((a_attr_map->type[i] == type) &&
                     (memcmp(a_attr_map->name[i],
-                            (void *) ((uintptr_t) attr +
-                                tsk_getu16(fs->endian, attr->name_off)),
+                            (void *) ((uintptr_t) attr + attr_name_off),
                             attr->nlen * 2) == 0)) {
                     id_new = a_attr_map->newId[i];
                     break;
@@ -1936,14 +1941,13 @@ ntfs_proc_attrseq(NTFS_INFO * ntfs,
         }
 
         /* Copy the name and convert it to UTF8 */
-        const uint16_t nameoff = tsk_getu16(fs->endian, attr->name_off);
-        if (attr->nlen && nameoff + (uint32_t) attr->nlen * 2 < tsk_getu32(fs->endian, attr->len)) {
+        if (attr->nlen && ((uint32_t) attr->nlen * 2) < attr_len - attr_name_off) {
             int i;
             UTF8 *name8;
             UTF16 *name16;
 
             name8 = (UTF8 *) name;
-            name16 = (UTF16 *) ((uintptr_t) attr + nameoff);
+            name16 = (UTF16 *) ((uintptr_t) attr + attr_name_off);
 
             retVal =
                 tsk_UTF16toUTF8(fs->endian, (const UTF16 **) &name16,
@@ -2375,8 +2379,8 @@ ntfs_proc_attrseq(NTFS_INFO * ntfs,
                     ("proc_attrseq: resident data offset of File Name Attribute is out of bounds!");
                 return TSK_COR;
             }
-            // A File Name Attribute should be at least 66 bytes in size
-            if ((attr_len < 66) || (attr_off > attr_len - 66)) {
+            // A File Name Attribute must be large enough to hold the fixed fields.
+            if (attr_off + (uint32_t)offsetof(ntfs_attr_fname, name) > attr_len) {
                 tsk_error_reset();
                 tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
                 tsk_error_set_errstr
@@ -2437,7 +2441,7 @@ ntfs_proc_attrseq(NTFS_INFO * ntfs,
                 }
                 fs_name->next = NULL;
             }
-            if (fname->nlen > attr_len - 66) {
+			if (attr_off + (uint32_t)offsetof(ntfs_attr_fname, name) + (uint32_t)fname->nlen * 2 > attr_len) {
                 tsk_error_reset();
                 tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
                 tsk_error_set_errstr
@@ -3329,7 +3333,7 @@ ntfs_load_bmap(NTFS_INFO * ntfs)
 
     if ((run_off < 48) ||
         (run_off >= attr_len) ||
-        ((uintptr_t) data_attr + run_off) > ((uintptr_t) mft + (uintptr_t) ntfs->mft_rsize_b)) {
+        ((uintptr_t) data_attr + run_off) >= ((uintptr_t) mft + (uintptr_t) ntfs->mft_rsize_b)) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
         tsk_error_set_errstr("Invalid run_off of Bitmap Data Attribute - value out of bounds");
@@ -3636,7 +3640,7 @@ ntfs_get_sds(TSK_FS_INFO * fs, uint32_t secid)
 		}
 		tsk_error_reset();
 		tsk_error_set_errno(TSK_ERR_FS_GENFS);
-		tsk_error_set_errstr("ntfs_get_sds: SII entry %" PRIu32 " not found", sii_secid);
+		tsk_error_set_errstr("ntfs_get_sds: SII entry %" PRIu32 " not found", secid);
 	}
 
 	// If we never even found an SII entry that matched our secid, update the error state.
